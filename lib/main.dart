@@ -1,0 +1,1243 @@
+import 'dart:async';
+import 'dart:convert';
+// import 'dart:ffi';
+import 'dart:io';
+import 'dart:math';
+
+// import 'package:audioplayers/audioplayers.dart';
+// import 'package:just_audio/just_audio.dart';
+import 'package:flame_audio/flame_audio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
+
+import 'package:image/image.dart' as img;
+
+import 'dart:math' as math;
+
+import 'package:http/http.dart' as http;
+
+import 'assets.dart';
+
+Color MainColor = Color.fromARGB(255, 40, 47, 52);
+
+String Retake_img = "assets/images/retake.png";
+
+String TopText = Assets.front_txt;
+
+String DummyImage = Assets.Center_img;
+
+// String clicked_image = "";
+
+bool imageFront_done = false;
+bool imageUp_done = false;
+bool imageDown_done = false;
+bool imageRight_done = false;
+bool imageLeft_done = false;
+
+String Front_clicked_image = "";
+String Up_clicked_image = "";
+String Down_clicked_image = "";
+String Right_clicked_image = "";
+String Left_clicked_image = "";
+
+String direct = "";
+
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  windowManager.ensureInitialized();
+  Window.initialize();
+
+  Window.setEffect(effect: WindowEffect.transparent);
+
+  windowManager.waitUntilReadyToShow().then((_) async {
+    const initialSize = Size(750, 850);
+    await windowManager.setSize(initialSize);
+    await windowManager.setMaximizable(false);
+    await windowManager.setMaximumSize(initialSize);
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    await windowManager.setAsFrameless();
+    await windowManager.setResizable(false);
+    await windowManager.setAlignment(Alignment.center);
+    // await windowManager.setPosition(Offset(offset.,offset.dy+50),animate: true);
+    // await windowManager.setPosition(Offset(585,115)); // My PC
+    await windowManager.setPosition(Offset(165,535+100)); // Cori PC
+    await windowManager.setHasShadow(false);
+    await windowManager.setAlwaysOnTop(true);
+    windowManager.show();
+
+  });
+
+  direct = Directory.current.path;
+  print(direct);
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  // This widget is the root of your application.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      color: Colors.transparent,
+      builder: (context, child) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: Stack(
+            children: [
+              /// Fake window border
+              Container(
+                width: 750,
+                height: 750,
+                decoration: BoxDecoration(
+                  color: MainColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: child!,
+                  ),
+                ),
+              ),
+
+              /// Window Caption
+              const SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: WindowCaption(),
+              ),
+
+              /// Resizable Border
+              const DragToResizeArea(
+                enableResizeEdges: [
+                  ResizeEdge.topLeft,
+                  ResizeEdge.top,
+                  ResizeEdge.topRight,
+                  ResizeEdge.left,
+                  ResizeEdge.right,
+                  ResizeEdge.bottomLeft,
+                  ResizeEdge.bottomLeft,
+                  ResizeEdge.bottomRight,
+                ],
+                child: SizedBox(),
+              ),
+            ],
+          ),
+        );
+      },
+      title: 'Flutter Demo',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const MyHomePage(),
+    );
+  }
+}
+
+/// Example app for Camera Windows plugin.
+class MyHomePage extends StatefulWidget {
+  /// Default Constructor
+  const MyHomePage();
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
+  String _cameraInfo = 'Unknown';
+  List<CameraDescription> _cameras = <CameraDescription>[];
+  int _cameraIndex = 0;
+  // int _cameraIndex = 6; // 6 For Cori PC Brio Camera
+  int _cameraId = -1;
+  bool _initialized = false;
+  bool _recording = false;
+  bool _recordingTimed = false;
+  bool _recordAudio = true;
+  bool _previewPaused = false;
+  Size? _previewSize;
+  ResolutionPreset _resolutionPreset = ResolutionPreset.veryHigh;
+  StreamSubscription<CameraErrorEvent>? _errorStreamSubscription;
+  StreamSubscription<CameraClosingEvent>? _cameraClosingStreamSubscription;
+
+  late AnimationController _controllerFront;
+  late Animation<double> _animationFront;
+
+  late AnimationController _controllerUp;
+  late Animation<double> _animationUp;
+
+  late AnimationController _controllerDown;
+  late Animation<double> _animationDown;
+
+  late AnimationController _controllerRight;
+  late Animation<double> _animationRight;
+
+  late AnimationController _controllerLeft;
+  late Animation<double> _animationLeft;
+
+  int RetakeAnimationDelay = 1000;
+
+  @override
+  void initState() {
+    setup_Animation_Controllers();
+    super.initState();
+    WidgetsFlutterBinding.ensureInitialized();
+    _fetchCameras();
+    _Server_Test();
+  }
+
+  void setup_Animation_Controllers() {
+    _controllerFront = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
+    );
+
+    _animationFront = Tween<double>(begin: 0, end: 1).animate(_controllerFront)
+      ..addListener(() {
+        setState(() {});
+      });
+
+    _controllerUp = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
+    );
+
+    _animationUp = Tween<double>(begin: 0, end: 1).animate(_controllerUp)
+      ..addListener(() {
+        setState(() {});
+      });
+
+    _controllerDown = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
+    );
+
+    _animationDown = Tween<double>(begin: 0, end: 1).animate(_controllerDown)
+      ..addListener(() {
+        setState(() {});
+      });
+
+    _controllerRight = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
+    );
+
+    _animationRight = Tween<double>(begin: 0, end: 1).animate(_controllerRight)
+      ..addListener(() {
+        setState(() {});
+      });
+
+    _controllerLeft = AnimationController(
+      vsync: this,
+      duration: Duration(
+          milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
+    );
+
+    _animationLeft = Tween<double>(begin: 0, end: 1).animate(_controllerLeft)
+      ..addListener(() {
+        setState(() {});
+      });
+  }
+
+  @override
+  void dispose() {
+    _disposeCurrentCamera();
+    _errorStreamSubscription?.cancel();
+    _errorStreamSubscription = null;
+    _cameraClosingStreamSubscription?.cancel();
+    _cameraClosingStreamSubscription = null;
+    super.dispose();
+    _controllerFront.dispose();
+    _controllerUp.dispose();
+    _controllerDown.dispose();
+    _controllerRight.dispose();
+    _controllerLeft.dispose();
+  }
+
+  /// Fetches list of available cameras from camera_windows plugin.
+  Future<void> _fetchCameras() async {
+    String cameraInfo;
+    List<CameraDescription> cameras = <CameraDescription>[];
+
+    int cameraIndex = 0;
+    try {
+      cameras = await CameraPlatform.instance.availableCameras();
+      if (cameras.isEmpty) {
+        cameraInfo = 'No available cameras';
+      } else {
+        for (CameraDescription cam in cameras) {
+          print(cam.name);
+        }
+        cameraIndex = _cameraIndex % cameras.length;
+        cameraInfo = 'Found camera: ${cameras[cameraIndex].name}';
+      }
+    } on PlatformException catch (e) {
+      cameraInfo = 'Failed to get cameras: ${e.code}: ${e.message}';
+    }
+
+    if (mounted) {
+      setState(() {
+        _cameraIndex = cameraIndex;
+        _cameras = cameras;
+        _cameraInfo = cameraInfo;
+      });
+    }
+  }
+
+  /// Initializes the camera on the device.
+  Future<void> _initializeCamera() async {
+    assert(!_initialized);
+
+    if (_cameras.isEmpty) {
+      return;
+    }
+
+    int cameraId = -1;
+    try {
+      final int cameraIndex = _cameraIndex % _cameras.length;
+      final CameraDescription camera = _cameras[cameraIndex];
+
+      cameraId = await CameraPlatform.instance.createCamera(
+        camera,
+        _resolutionPreset,
+        enableAudio: _recordAudio,
+      );
+
+      unawaited(_errorStreamSubscription?.cancel());
+      _errorStreamSubscription = CameraPlatform.instance
+          .onCameraError(cameraId)
+          .listen(_onCameraError);
+
+      unawaited(_cameraClosingStreamSubscription?.cancel());
+      _cameraClosingStreamSubscription = CameraPlatform.instance
+          .onCameraClosing(cameraId)
+          .listen(_onCameraClosing);
+
+      final Future<CameraInitializedEvent> initialized =
+          CameraPlatform.instance
+              .onCameraInitialized(cameraId)
+              .first;
+
+      await CameraPlatform.instance.initializeCamera(
+        cameraId,
+      );
+
+      final CameraInitializedEvent event = await initialized;
+      _previewSize = Size(
+        event.previewWidth,
+        event.previewHeight,
+      );
+
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+          _cameraId = cameraId;
+          _cameraIndex = cameraIndex;
+          _cameraInfo = 'Capturing camera: ${camera.name}';
+        });
+      }
+    } on CameraException catch (e) {
+      print(e);
+      try {
+        if (cameraId >= 0) {
+          await CameraPlatform.instance.dispose(cameraId);
+        }
+      } on CameraException catch (e) {
+        debugPrint('Failed to dispose camera: ${e.code}: ${e.description}');
+      }
+
+      // Reset state.
+      if (mounted) {
+        setState(() {
+          _initialized = false;
+          _cameraId = -1;
+          _cameraIndex = 0;
+          _previewSize = null;
+          _recording = false;
+          _recordingTimed = false;
+          _cameraInfo =
+          'Failed to initialize camera: ${e.code}: ${e.description}';
+        });
+      }
+    }
+  }
+
+  Future<void> _disposeCurrentCamera() async {
+    if (_cameraId >= 0 && _initialized) {
+      try {
+        await CameraPlatform.instance.dispose(_cameraId);
+
+        if (mounted) {
+          setState(() {
+            _initialized = false;
+            _cameraId = -1;
+            _previewSize = null;
+            _recording = false;
+            _recordingTimed = false;
+            _previewPaused = false;
+            _cameraInfo = 'Camera disposed';
+          });
+        }
+      } on CameraException catch (e) {
+        if (mounted) {
+          setState(() {
+            _cameraInfo =
+            'Failed to dispose camera: ${e.code}: ${e.description}';
+          });
+        }
+      }
+    }
+  }
+
+  Widget _buildPreview() {
+    return CameraPlatform.instance.buildPreview(_cameraId);
+  }
+
+  void Timer_Picture(){
+    var time = 4;
+    Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        if (time == 0) {
+          timer.cancel();
+          _takePicture();
+        }else{
+          time = time-1;
+          TopText = "$time";
+        }
+      });
+    });
+  }
+
+  Future<void> _takePicture() async {
+    final XFile file = await CameraPlatform.instance.takePicture(_cameraId);
+    // clicked_image = file.path;
+    _showInSnackBar('Picture captured to: ${file.path}');
+    try {
+      File contrastFile = File(file.path);
+      // create an img.Image from your original image file for processing
+      img.Image? originalImage = img.decodeImage(
+          File(contrastFile.path).readAsBytesSync());
+      // now crop out only the detected face boundary, below will crop out the first face from the list
+      // img.Image? faceCrop = img.copyCrop(originalImage!, x: 466, y: 166, width: 323, height: 304); // USED TO CROP IMAGE
+      // img.Image? faceCrop = img.copyCrop(originalImage!, x: 1280, y: 720, width: 323, height: 304); // USED TO CROP IMAGE
+      img.Image? faceCrop = img.copyResize(originalImage!, width:1280, height: 720); // USED TO CROP IMAGE
+      // ImageLib.Image? contrast =
+      // ImageLib.decodeImage(contrastFile.readAsBytesSync());
+      // contrast = ImageLib.copyRotate(contrast!, angle: 90); // USED TO ROTATE IMAGE
+      // File croped_img = File("C:/Android_Development/cori_image_api/image.png");
+      // croped_img.writeAsBytesSync(img.encodeJpg(faceCrop)); // USED TO SAVE Cropped Image
+      setState(() {
+        PlayClickSound();
+        if (!imageFront_done) {
+          Save_Img("Front",faceCrop);
+          // imageFront_done = true;
+          DummyImage = Assets.Up_img;
+          TopText = Assets.up_txt;
+        } else if (!imageUp_done) {
+          Save_Img("Up",faceCrop);
+          imageUp_done = true;
+          DummyImage = Assets.Down_img;
+          TopText = Assets.down_txt;
+        } else if (!imageDown_done) {
+          Save_Img("Down",faceCrop);
+          // imageDown_done = true;
+          DummyImage = Assets.Right_img;
+          TopText = Assets.right_txt;
+        } else if (!imageRight_done) {
+          Save_Img("Right",faceCrop);
+          imageRight_done = true;
+          DummyImage = Assets.Left_img;
+          TopText = Assets.left_txt;
+        } else if (!imageLeft_done) {
+          Save_Img("Left",faceCrop);
+          imageLeft_done = true;
+        }
+      });
+      // setState(() {
+      //   imageCache.clear();
+      //   imageCache.clearLiveImages();
+      //   reload();
+      // });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  void Save_Img(String name, img.Image? image){
+    int timestamp = DateTime.now().millisecondsSinceEpoch;
+    File croped_img = File(Assets.Photos_Folder+"/$name-$timestamp.png");
+    croped_img.writeAsBytesSync(img.encodeJpg(image!)); // USED TO SAVE Cropped Image
+    if (name == "Front") {
+      imageFront_done = true;
+      Front_clicked_image = croped_img.path;
+    } else if (name == "Up") {
+      imageUp_done = true;
+      Up_clicked_image = croped_img.path;
+    } else if (name == "Down") {
+      imageDown_done = true;
+      Down_clicked_image = croped_img.path;
+    } else if (name == "Right") {
+      imageRight_done = true;
+      Right_clicked_image = croped_img.path;
+    } else {
+      Left_clicked_image = croped_img.path;
+      imageLeft_done = true;
+    }
+  }
+
+  void PlayClickSound() async {
+    // FlameAudio.bgm.initialize();
+    FlameAudio.play("click.wav");
+    // FlameAudio.bgm.play("click.wav");
+    // final player = AudioPlayer();
+    // await player.play(AssetSource("assets/images/click.wav"));
+    // AudioPlayer player = AudioPlayer();
+    // // player.load("assets/audios/camera_click.mp3");
+    // await player.setAsset("assets/audios/camera_click.mp3");
+    // player.play();
+  }
+
+  Future<void> _recordTimed(int seconds) async {
+    if (_initialized && _cameraId > 0 && !_recordingTimed) {
+      unawaited(CameraPlatform.instance
+          .onVideoRecordedEvent(_cameraId)
+          .first
+          .then((VideoRecordedEvent event) async {
+        if (mounted) {
+          setState(() {
+            _recordingTimed = false;
+          });
+
+          _showInSnackBar('Video captured to: ${event.file.path}');
+        }
+      }));
+
+      await CameraPlatform.instance.startVideoRecording(
+        _cameraId,
+        maxVideoDuration: Duration(seconds: seconds),
+      );
+
+      if (mounted) {
+        setState(() {
+          _recordingTimed = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleRecord() async {
+    if (_initialized && _cameraId > 0) {
+      if (_recordingTimed) {
+        /// Request to stop timed recording short.
+        await CameraPlatform.instance.stopVideoRecording(_cameraId);
+      } else {
+        if (!_recording) {
+          await CameraPlatform.instance.startVideoRecording(_cameraId);
+        } else {
+          final XFile file =
+          await CameraPlatform.instance.stopVideoRecording(_cameraId);
+
+          _showInSnackBar('Video captured to: ${file.path}');
+        }
+
+        if (mounted) {
+          setState(() {
+            _recording = !_recording;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _togglePreview() async {
+    if (_initialized && _cameraId >= 0) {
+      if (!_previewPaused) {
+        await CameraPlatform.instance.pausePreview(_cameraId);
+      } else {
+        await CameraPlatform.instance.resumePreview(_cameraId);
+      }
+      if (mounted) {
+        setState(() {
+          _previewPaused = !_previewPaused;
+        });
+      }
+    }
+  }
+
+  Future<void> _switchCamera() async {
+    if (_cameras.isNotEmpty) {
+      // select next index;
+      _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+      if (_initialized && _cameraId >= 0) {
+        await _disposeCurrentCamera();
+        await _fetchCameras();
+        if (_cameras.isNotEmpty) {
+          await _initializeCamera();
+        }
+      } else {
+        await _fetchCameras();
+      }
+    }
+  }
+
+  Future<void> _onResolutionChange(ResolutionPreset newValue) async {
+    setState(() {
+      _resolutionPreset = newValue;
+    });
+    if (_initialized && _cameraId >= 0) {
+      // Re-inits camera with new resolution preset.
+      await _disposeCurrentCamera();
+      await _initializeCamera();
+    }
+  }
+
+  Future<void> _onAudioChange(bool recordAudio) async {
+    setState(() {
+      _recordAudio = recordAudio;
+    });
+    if (_initialized && _cameraId >= 0) {
+      // Re-inits camera with new record audio setting.
+      await _disposeCurrentCamera();
+      await _initializeCamera();
+    }
+  }
+
+  void _onCameraError(CameraErrorEvent event) {
+    if (mounted) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text('Error: ${event.description}')));
+
+      // Dispose camera on camera error as it can not be used anymore.
+      _disposeCurrentCamera();
+      _fetchCameras();
+    }
+  }
+
+  void _onCameraClosing(CameraClosingEvent event) {
+    if (mounted) {
+      _showInSnackBar('Camera is closing');
+    }
+  }
+
+  void _showInSnackBar(String message) {
+    _scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+      content: Text(message),
+      duration: const Duration(seconds: 1),
+    ));
+  }
+
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+  GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final List<DropdownMenuItem<ResolutionPreset>> resolutionItems =
+    ResolutionPreset.values
+        .map<DropdownMenuItem<ResolutionPreset>>((ResolutionPreset value) {
+      return DropdownMenuItem<ResolutionPreset>(
+        value: value,
+        child: Text(value.toString()),
+      );
+    }).toList();
+
+    return MaterialApp(
+      color: Colors.transparent,
+      debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
+      home: Scaffold(
+        backgroundColor: MainColor,
+        body: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Expanded(
+              child: Container(
+                height: 550,
+                // color: Colors.grey,
+                child: ListView(
+                  children: <Widget>[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 5,
+                        horizontal: 10,
+                      ),
+                      // child: Text(_cameraInfo),
+                      // child: Text(direct,style: TextStyle(color: Colors.white),),
+                      child: SizedBox(
+                        height: 25,
+                      ),
+                    ),
+                    if (_cameras.isEmpty)
+                      ElevatedButton(
+                        onPressed: _fetchCameras,
+                        child: const Text('Re-check available cameras'),
+                      ),
+                    if (_cameras.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          // DropdownButton<ResolutionPreset>(
+                          //   value: _resolutionPreset,
+                          //   onChanged: (ResolutionPreset? value) {
+                          //     if (value != null) {
+                          //       _onResolutionChange(value);
+                          //     }
+                          //   },
+                          //   items: resolutionItems,
+                          // ),
+                          // const SizedBox(width: 20),
+                          // const Text('Audio:'),
+                          // Switch(
+                          //     value: _recordAudio,
+                          //     onChanged: (bool state) => _onAudioChange(state)),
+                          const SizedBox(width: 20),
+                          ElevatedButton(
+                            onPressed: _initialized
+                                ? _disposeCurrentCamera
+                                : _initializeCamera,
+                            child: Text(_initialized
+                                ? 'Dispose camera'
+                                : 'Create camera'),
+                          ),
+                          const SizedBox(width: 5),
+                          ElevatedButton(
+                            onPressed: _initialized ? Timer_Picture : null,
+                            // onPressed: _initialized ? _takePicture : null,
+                            child: const Text('Take picture'),
+                          ),
+                          // const SizedBox(width: 5),
+                          // ElevatedButton(
+                          //   onPressed: _initialized ? _togglePreview : null,
+                          //   child: Text(
+                          //     _previewPaused ? 'Resume preview' : 'Pause preview',
+                          //   ),
+                          // ),
+                          // const SizedBox(width: 5),
+                          // ElevatedButton(
+                          //   onPressed: _initialized ? _toggleRecord : null,
+                          //   child: Text(
+                          //     (_recording || _recordingTimed)
+                          //         ? 'Stop recording'
+                          //         : 'Record Video',
+                          //   ),
+                          // ),
+                          // const SizedBox(width: 5),
+                          // ElevatedButton(
+                          //   onPressed: (_initialized && !_recording && !_recordingTimed)
+                          //       ? () => _recordTimed(5)
+                          //       : null,
+                          //   child: const Text(
+                          //     'Record 5 seconds',
+                          //   ),
+                          // ),
+                          if (_cameras.length > 1) ...<Widget>[
+                            const SizedBox(width: 5),
+                            // ElevatedButton(
+                            //   onPressed: _switchCamera,
+                            //   child: const Text(
+                            //     'Switch camera',
+                            //   ),
+                            // ),
+                          ]
+                        ],
+                      ),
+                    const SizedBox(height: 15),
+                    Align(
+                        alignment: Alignment.center,
+                        child: imageLeft_done
+                            ? SizedBox(height: 33,)
+                            : Text(
+                          TopText,
+                          style:
+                          TextStyle(color: Colors.white, fontSize: 25),
+                        )),
+                    // const SizedBox(height: 5),
+                    if (_initialized && _cameraId > 0 && _previewSize != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 15,
+                        ),
+                        child: Align(
+                          child: Transform.rotate(
+                            angle: 0,
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                maxHeight:400,
+                              ),
+                              child: Stack(
+                                children: [
+                                  Transform(
+                                    alignment: Alignment.center,
+                                    transform: Matrix4.rotationY(math.pi),
+                                    child: AspectRatio(
+                                      aspectRatio: _previewSize!.width /
+                                          _previewSize!.height,
+                                      child: _buildPreview(),
+                                    ),
+                                  ),
+                                  // Align(
+                                  //   alignment: Alignment.topCenter,
+                                  //   child: image5_done
+                                  //       ? SizedBox()
+                                  //       : Text(
+                                  //           TopText,
+                                  //           style: TextStyle(
+                                  //               color: Colors.white, fontSize: 25),
+                                  //         ),
+                                  // ),
+                                  // Show Dummy Image as a Reference for user
+                                  Align(
+                                    alignment: Alignment.center,
+                                    child: imageLeft_done
+                                        ? SizedBox()
+                                        : Opacity(opacity : 0.5 ,child: Image(image: AssetImage(DummyImage),height: 300,)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_previewSize != null)
+                      Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image(
+                                image: AssetImage(
+                                    imageFront_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                            SizedBox(
+                              width: 12,
+                            ),
+                            Image(
+                                image: AssetImage(
+                                    imageUp_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                            SizedBox(
+                              width: 12,
+                            ),
+                            Image(
+                                image: AssetImage(
+                                    imageDown_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                            SizedBox(
+                              width: 12,
+                            ),
+                            Image(
+                                image: AssetImage(
+                                    imageRight_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                            SizedBox(
+                              width: 12,
+                            ),
+                            Image(
+                                image: AssetImage(
+                                    imageLeft_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                          ],
+                        ),
+                        // child: Text(
+                        //   'Preview size: ${_previewSize!.width.toStringAsFixed(0)}x${_previewSize!.height.toStringAsFixed(0)}',
+                        // ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 10,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ImageViewBottom(Assets.Center_filled_img, "Front"),
+                ImageViewBottom(Assets.Up_filled_img, "Up"),
+                ImageViewBottom(Assets.Down_filled_img, "Down"),
+                ImageViewBottom(Assets.Right_filled_img, "Right"),
+                ImageViewBottom(Assets.Left_filled_img, "Left"),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Widget ImageViewBottom(String img, String txt) {
+  //   return Stack(
+  //     children: [
+  //       Padding(
+  //         padding: const EdgeInsets.all(8.0),
+  //         child: Column(
+  //           children: [
+  //             Container(
+  //               decoration: BoxDecoration(
+  //                   color: Colors.black12,
+  //                   border: Border.all(
+  //                     color: Colors.black12,
+  //                   ),
+  //                   borderRadius: BorderRadius.all(Radius.circular(25))),
+  //               width: 110,
+  //               height: 110,
+  //               child: Padding(
+  //                 padding: const EdgeInsets.all(10.0),
+  //                 child: Image(
+  //                   image: AssetImage(img),
+  //                 ),
+  //               ),
+  //             ),
+  //             Text(
+  //               txt,
+  //               style: TextStyle(color: Colors.white),
+  //             )
+  //           ],
+  //         ),
+  //       ),
+  //       //    Positioned(
+  //       //        right: 0,
+  //       //        child: clicked_image != "" ? Image.file(
+  //       // File(clicked_image),
+  //       // ) : Image(image: AssetImage(Retake_img),),height: 35,)
+  //       Positioned(
+  //         right: 0,
+  //         child: GestureDetector(
+  //           onTap: (){
+  //             setState(() {
+  //               // clicked_image = "";
+  //             });
+  //           },
+  //           child: Image(
+  //             image: AssetImage(Retake_img),
+  //           ),
+  //         ),
+  //         height: 35,
+  //       )
+  //     ],
+  //   );
+  // }
+
+  Widget ImageViewBottom(String img, String txt) {
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                    color: Colors.black12,
+                    border: Border.all(
+                      color: Colors.black12,
+                    ),
+                    borderRadius: BorderRadius.all(Radius.circular(25))),
+                width: 110,
+                height: 110,
+                child: GestureDetector(
+                  onTap: (){
+                    _showImageDialog(context,img,txt);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(10.0),
+                    child: isPhotoExist(txt) != "" ? Image.file(File(isPhotoExist(txt)), fit: BoxFit.fitHeight,)
+                          : Image(image: AssetImage(img),
+                    // child: Image(image: AssetImage(img),
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                txt,
+                style: TextStyle(color: Colors.white),
+              )
+            ],
+          ),
+        ),
+        //    Positioned(
+        //        right: 0,
+        //        child: clicked_image != "" ? Image.file(
+        // File(clicked_image),
+        // ) : Image(image: AssetImage(Retake_img),),height: 35,)
+        isPhotoExist(txt) != "" ? Positioned(
+          right: 0,
+          child: Transform.rotate(
+            angle: GetRotateValue(txt) * 2 * 3.141592653589793,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showConfirmationDialog(context,txt);
+                });
+              },
+              child: Image(
+                image: AssetImage(Retake_img),
+              ),
+            ),
+          ),
+          height: 35,
+        ) : SizedBox(),
+      ],
+    );
+  }
+
+  // To Check if Photo of Pose is Taken or not for retake Button to Show or not
+  String isPhotoExist(String value){
+    if (value == "Front") {
+      return Front_clicked_image;
+    } else if (value == "Up") {
+      return Up_clicked_image;
+    } else if (value == "Down") {
+      return Down_clicked_image;
+    } else if (value == "Right") {
+      return Right_clicked_image;
+    } else {
+      return Left_clicked_image;
+    }
+  }
+
+  // TO get Taken Photo of Pose or get Placeholder Dummy Photo
+  String GetTakenPhotoOrPlaceHolder(String value){
+    // print("Front: $Front_clicked_image");
+    // print("Up: $Up_clicked_image");
+    // print("Down: $Down_clicked_image");
+    // print("Right: $Right_clicked_image");
+    // print("Left: $Left_clicked_image");
+
+    if (value == "Front") {
+        return Assets.Center_filled_img;
+    } else if (value == "Up") {
+        return Assets.Up_filled_img;
+    } else if (value == "Down") {
+        return Assets.Down_filled_img;
+    } else if (value == "Right") {
+        return Assets.Right_filled_img;
+    } else {
+        return Assets.Left_filled_img;
+    }
+  }
+
+  // When Retake Clicked Empty Photo Variable and set Image_Done to false
+  void RetakeClick(String value) {
+    if (value == "Front") {
+      Front_clicked_image = "";
+      imageFront_done = false;
+    } else if (value == "Up") {
+      Up_clicked_image = "";
+      imageUp_done = false;
+    } else if (value == "Down") {
+      Down_clicked_image = "";
+      imageDown_done = false;
+    } else if (value == "Right") {
+      Right_clicked_image = "";
+      imageRight_done = false;
+    } else {
+      Left_clicked_image = "";
+      imageLeft_done = false;
+    }
+  }
+
+  // To get Rotation for Retake Button Animation
+  double GetRotateValue(String value) {
+    if (value == "Front") {
+      return _animationFront.value;
+    } else if (value == "Up") {
+      return _animationUp.value;
+    } else if (value == "Down") {
+      return _animationDown.value;
+    } else if (value == "Right") {
+      return _animationRight.value;
+    } else {
+      return _animationLeft.value;
+    }
+  }
+
+  // To trigger Retake Button Animation
+  RotateRetakeButton(String txt) {
+    if (txt == "Front") {
+      _controllerFront.forward(from: 0);
+    } else if (txt == "Up") {
+      _controllerUp.forward(from: 0);
+    } else if (txt == "Down") {
+      _controllerDown.forward(from: 0);
+    } else if (txt == "Right") {
+      _controllerRight.forward(from: 0);
+    } else {
+      _controllerLeft.forward(from: 0);
+    }
+  }
+
+  // To show Image Dialog of Clicked Image or PlaceHolder Dummy Image
+  void _showImageDialog(BuildContext context, String img, String txt) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(txt,style: TextStyle(color: Colors.white),textAlign: TextAlign.center,),
+          backgroundColor: MainColor,
+          content : Get_Clicked_Image_Or_Placeholder(img,txt),
+          // Image.file(File(img)),
+          // Image(image: AssetImage(img)),
+          // Replace with your image asset path
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget Get_Clicked_Image_Or_Placeholder(img,txt){
+    if(isPhotoExist(txt) != ""){
+      return Image.file(File(isPhotoExist(txt)), fit: BoxFit.fitHeight,);
+    }else{
+      return Image(image: AssetImage(img));
+    }
+    // return isPhotoExist(txt) != ""
+    //     ? Image.file(File(GetTakenPhotoOrPlaceHolder(txt)), fit: BoxFit.fitHeight,)
+    //     : Image(image: AssetImage(img);
+  }
+
+  // To Show Confirmation Dialog to retake Photo or not
+  void _showConfirmationDialog(BuildContext context,String txt) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Confirmation'),
+          content: Text('Do You want to Retake $txt Picture?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false); // No
+                SendData_Server();
+              },
+              child: Text('No'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(true); // Yes
+                // exit(0);
+              },
+              child: Text('Yes'),
+            ),
+          ],
+        );
+      },
+    ).then((value) {
+      if (value == true) {
+        // User selected "Yes"
+        print('User clicked Yes');
+        deleteFile(txt);
+        RotateRetakeButton(txt);
+        RetakeClick(txt);
+      } else if (value == false) {
+        // User selected "No"
+        print('User clicked No');
+      }
+    });
+  }
+
+  Future<void> SendData_Server() async {
+    var body = jsonEncode({ 'data': { 'apikey': '12345678901234567890' }, "Server" : "My name is Server" });
+    var url = Uri.http('192.168.1.14:3000', '/status');
+    var response = await http.post(url, headers: {"Content-Type": "application/json"} , body: body);
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+    // print(await http.read(Uri.https('example.com', 'foobar.txt')));
+  }
+
+  // Deletes the Photo from Folder that needs to be retaken
+  deleteFile(String value){
+    String del_img = "";
+    if (value == "Front") {
+      del_img = Front_clicked_image;
+    } else if (value == "Up") {
+      del_img = Up_clicked_image;
+    } else if (value == "Down") {
+      del_img = Down_clicked_image;
+    } else if (value == "Right") {
+      del_img = Right_clicked_image;
+    } else {
+      del_img = Left_clicked_image;
+    }
+
+    print("Del $del_img");
+
+    final file = File(del_img);
+    file.delete();
+  }
+
+  _Server_Test() async{
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8083);
+    print('Server is listening on ${server.address}:${server.port}');
+
+    await for (HttpRequest request in server) {
+      if (request.method == 'PUT' &&
+          request.headers.contentType?.mimeType == 'application/json') {
+        try {
+          final requestBody = await utf8.decoder.bind(request).join();
+          final jsonData = json.decode(requestBody);
+
+          String name = jsonData['name'];
+          String path = jsonData['path'];
+
+          Server_Respose_Image_locations(name,path);
+
+          // Process the JSON data as needed
+          final responseJson = {'message': 'Received JSON data', 'data': jsonData};
+          request.response
+            ..headers.contentType = ContentType.json
+            ..write(json.encode(responseJson))
+            ..close();
+        } catch (e) {
+          // Handle JSON parsing error
+          request.response
+            ..statusCode = HttpStatus.badRequest
+            ..write('Invalid JSON data')
+            ..close();
+        }
+      } else {
+        // Handle other types of requests
+        request.response
+          ..statusCode = HttpStatus.methodNotAllowed
+          ..write('Method not allowed')
+          ..close();
+      }
+    }
+  }
+
+  Server_Respose_Image_locations(String name, String path){
+    setState(() {
+      if (name == "front") {
+        imageFront_done = true;
+        Front_clicked_image = path;
+      } else if (name == "up") {
+        imageUp_done = true;
+        Up_clicked_image = path;
+      } else if (name == "down") {
+        imageDown_done = true;
+        Down_clicked_image = path;
+      } else if (name == "right") {
+        imageRight_done = true;
+        Right_clicked_image = path;
+      } else if (name == "left") {
+        Left_clicked_image = path;
+        imageLeft_done = true;
+      }else{
+        print("No a right Photo Name");
+      }
+    });
+
+  }
+
+}
