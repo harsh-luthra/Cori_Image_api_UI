@@ -25,19 +25,19 @@ Color MainColor = Color.fromARGB(255, 40, 47, 52);
 
 String Retake_img = "assets/images/retake.png";
 
-String TopText = Assets.front_txt;
+String TopText = Assets.center_txt;
 
 String DummyImage = Assets.Center_img;
 
-// String clicked_image = "";
+String clicked_image = "";
 
-bool imageFront_done = false;
+bool imageCenter_done = false;
 bool imageUp_done = false;
 bool imageDown_done = false;
 bool imageRight_done = false;
 bool imageLeft_done = false;
 
-String Front_clicked_image = "";
+String Center_clicked_image = "";
 String Up_clicked_image = "";
 String Down_clicked_image = "";
 String Right_clicked_image = "";
@@ -45,6 +45,7 @@ String Left_clicked_image = "";
 
 String direct = "";
 
+bool STARTED = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -167,8 +168,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   StreamSubscription<CameraErrorEvent>? _errorStreamSubscription;
   StreamSubscription<CameraClosingEvent>? _cameraClosingStreamSubscription;
 
-  late AnimationController _controllerFront;
-  late Animation<double> _animationFront;
+  late AnimationController _controllerCenter;
+  late Animation<double> _animationCenter;
 
   late AnimationController _controllerUp;
   late Animation<double> _animationUp;
@@ -194,13 +195,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void setup_Animation_Controllers() {
-    _controllerFront = AnimationController(
+    _controllerCenter = AnimationController(
       vsync: this,
       duration: Duration(
           milliseconds: RetakeAnimationDelay), // Adjust the animation duration as needed
     );
 
-    _animationFront = Tween<double>(begin: 0, end: 1).animate(_controllerFront)
+    _animationCenter = Tween<double>(begin: 0, end: 1).animate(_controllerCenter)
       ..addListener(() {
         setState(() {});
       });
@@ -258,7 +259,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _cameraClosingStreamSubscription?.cancel();
     _cameraClosingStreamSubscription = null;
     super.dispose();
-    _controllerFront.dispose();
+    _controllerCenter.dispose();
     _controllerUp.dispose();
     _controllerDown.dispose();
     _controllerRight.dispose();
@@ -439,9 +440,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       // croped_img.writeAsBytesSync(img.encodeJpg(faceCrop)); // USED TO SAVE Cropped Image
       setState(() {
         PlayClickSound();
-        if (!imageFront_done) {
-          Save_Img("Front",faceCrop);
-          // imageFront_done = true;
+        if (!imageCenter_done) {
+          Save_Img("Center",faceCrop);
+          // imageCenter_done = true;
           DummyImage = Assets.Up_img;
           TopText = Assets.up_txt;
         } else if (!imageUp_done) {
@@ -478,9 +479,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     int timestamp = DateTime.now().millisecondsSinceEpoch;
     File croped_img = File(Assets.Photos_Folder+"/$name-$timestamp.png");
     croped_img.writeAsBytesSync(img.encodeJpg(image!)); // USED TO SAVE Cropped Image
-    if (name == "Front") {
-      imageFront_done = true;
-      Front_clicked_image = croped_img.path;
+    if (name == "Center") {
+      imageCenter_done = true;
+      Center_clicked_image = croped_img.path;
     } else if (name == "Up") {
       imageUp_done = true;
       Up_clicked_image = croped_img.path;
@@ -675,7 +676,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       // child: Text(_cameraInfo),
                       // child: Text(direct,style: TextStyle(color: Colors.white),),
                       child: SizedBox(
-                        height: 25,
+                        height: 50,
                       ),
                     ),
                     if (_cameras.isEmpty)
@@ -702,19 +703,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           //     value: _recordAudio,
                           //     onChanged: (bool state) => _onAudioChange(state)),
                           const SizedBox(width: 20),
-                          ElevatedButton(
-                            onPressed: _initialized
-                                ? _disposeCurrentCamera
-                                : _initializeCamera,
-                            child: Text(_initialized
-                                ? 'Dispose camera'
-                                : 'Create camera'),
-                          ),
+                          // ElevatedButton(
+                          //   onPressed: _initialized
+                          //       ? _disposeCurrentCamera
+                          //       : _initializeCamera,
+                          //   child: Text(_initialized
+                          //       ? 'Dispose camera'
+                          //       : 'Create camera'),
+                          // ),
+                          All_Done() ? ElevatedButton(
+                          onPressed:(){
+                          exit(0);
+                          },
+                          child: const Text('Finish'),
+                          ) : SizedBox(),
                           const SizedBox(width: 5),
                           ElevatedButton(
-                            onPressed: _initialized ? Timer_Picture : null,
+                            onPressed:(){
+                               Start_Capturing_Request("Harsh","center");
+                               setState(() {
+                                 STARTED = true;
+                               });
+                             },
+                            // onPressed: _initialized ? Timer_Picture : null,
                             // onPressed: _initialized ? _takePicture : null,
-                            child: const Text('Take picture'),
+                            child: Text(STARTED == true ? 'Restart Capturing' : 'Start Capturing'),
                           ),
                           // const SizedBox(width: 5),
                           // ElevatedButton(
@@ -758,7 +771,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         child: imageLeft_done
                             ? SizedBox(height: 33,)
                             : Text(
-                          TopText,
+                          //TopText,
+                          "",
                           style:
                           TextStyle(color: Colors.white, fontSize: 25),
                         )),
@@ -816,7 +830,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           children: [
                             Image(
                                 image: AssetImage(
-                                    imageFront_done ? Assets.done_bar_img : Assets.pending_bar_img)),
+                                    imageCenter_done ? Assets.done_bar_img : Assets.pending_bar_img)),
                             SizedBox(
                               width: 12,
                             ),
@@ -857,13 +871,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ImageViewBottom(Assets.Center_filled_img, "Front"),
+                ImageViewBottom(Assets.Center_filled_img, "Center"),
                 ImageViewBottom(Assets.Up_filled_img, "Up"),
                 ImageViewBottom(Assets.Down_filled_img, "Down"),
                 ImageViewBottom(Assets.Right_filled_img, "Right"),
                 ImageViewBottom(Assets.Left_filled_img, "Left"),
               ],
-            )
+            ),
+            // ElevatedButton(onPressed: () {}, child: Text("Finish")),
           ],
         ),
       ),
@@ -961,9 +976,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
         //    Positioned(
         //        right: 0,
-        //        child: clicked_image != "" ? Image.file(
+        //        child: isPhotoExist(txt) != "" ? Image.file(
         // File(clicked_image),
-        // ) : Image(image: AssetImage(Retake_img),),height: 35,)
+        // ) : Image(image: AssetImage(Retake_img),),height: 35,),
         isPhotoExist(txt) != "" ? Positioned(
           right: 0,
           child: Transform.rotate(
@@ -987,8 +1002,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   // To Check if Photo of Pose is Taken or not for retake Button to Show or not
   String isPhotoExist(String value){
-    if (value == "Front") {
-      return Front_clicked_image;
+    if (value == "Center") {
+      return Center_clicked_image;
     } else if (value == "Up") {
       return Up_clicked_image;
     } else if (value == "Down") {
@@ -1002,13 +1017,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   // TO get Taken Photo of Pose or get Placeholder Dummy Photo
   String GetTakenPhotoOrPlaceHolder(String value){
-    // print("Front: $Front_clicked_image");
+    // print("Center: $Center_clicked_image");
     // print("Up: $Up_clicked_image");
     // print("Down: $Down_clicked_image");
     // print("Right: $Right_clicked_image");
     // print("Left: $Left_clicked_image");
 
-    if (value == "Front") {
+    if (value == "Center") {
         return Assets.Center_filled_img;
     } else if (value == "Up") {
         return Assets.Up_filled_img;
@@ -1023,19 +1038,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   // When Retake Clicked Empty Photo Variable and set Image_Done to false
   void RetakeClick(String value) {
-    if (value == "Front") {
-      Front_clicked_image = "";
-      imageFront_done = false;
+    if (value == "Center") {
+      Center_clicked_image = "";
+      imageCenter_done = false;
+      Start_Capturing_Request("harsh", "center");
     } else if (value == "Up") {
+      Start_Capturing_Request("harsh", "up");
       Up_clicked_image = "";
       imageUp_done = false;
     } else if (value == "Down") {
+      Start_Capturing_Request("harsh", "down");
       Down_clicked_image = "";
       imageDown_done = false;
     } else if (value == "Right") {
+      Start_Capturing_Request("harsh", "right");
       Right_clicked_image = "";
       imageRight_done = false;
     } else {
+      Start_Capturing_Request("harsh", "left");
       Left_clicked_image = "";
       imageLeft_done = false;
     }
@@ -1043,8 +1063,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   // To get Rotation for Retake Button Animation
   double GetRotateValue(String value) {
-    if (value == "Front") {
-      return _animationFront.value;
+    if (value == "Center") {
+      return _animationCenter.value;
     } else if (value == "Up") {
       return _animationUp.value;
     } else if (value == "Down") {
@@ -1058,8 +1078,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   // To trigger Retake Button Animation
   RotateRetakeButton(String txt) {
-    if (txt == "Front") {
-      _controllerFront.forward(from: 0);
+    if (txt == "Center") {
+      _controllerCenter.forward(from: 0);
     } else if (txt == "Up") {
       _controllerUp.forward(from: 0);
     } else if (txt == "Down") {
@@ -1119,7 +1139,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(false); // No
-                SendData_Server();
+                // SendData_Server();
               },
               child: Text('No'),
             ),
@@ -1147,10 +1167,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> SendData_Server() async {
-    var body = jsonEncode({ 'data': { 'apikey': '12345678901234567890' }, "Server" : "My name is Server" });
-    var url = Uri.http('192.168.1.14:3000', '/status');
-    var response = await http.post(url, headers: {"Content-Type": "application/json"} , body: body);
+  // Future<void> SendData_Server() async {
+  //   var body = jsonEncode({ 'data': { 'apikey': '12345678901234567890' }, "Server" : "My name is Server" });
+  //   var url = Uri.http('192.168.1.14:3000', '/status');
+  //   var response = await http.post(url, headers: {"Content-Type": "application/json"} , body: body);
+  //   print('Response status: ${response.statusCode}');
+  //   print('Response body: ${response.body}');
+  //   // print(await http.read(Uri.https('example.com', 'foobar.txt')));
+  // }
+
+  Future<void> Start_Capturing_Request(String name, String orientation) async {
+    var body = jsonEncode({ 'orientation': orientation, "name" : name });
+    var url = Uri.http('127.0.0.1:8084', '');
+    var response = await http.put(url, headers: {"Content-Type": "application/json"} , body: body);
     print('Response status: ${response.statusCode}');
     print('Response body: ${response.body}');
     // print(await http.read(Uri.https('example.com', 'foobar.txt')));
@@ -1159,8 +1188,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   // Deletes the Photo from Folder that needs to be retaken
   deleteFile(String value){
     String del_img = "";
-    if (value == "Front") {
-      del_img = Front_clicked_image;
+    if (value == "Center") {
+      del_img = Center_clicked_image;
     } else if (value == "Up") {
       del_img = Up_clicked_image;
     } else if (value == "Down") {
@@ -1218,9 +1247,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Server_Respose_Image_locations(String name, String path){
     setState(() {
-      if (name == "front") {
-        imageFront_done = true;
-        Front_clicked_image = path;
+      if (name == "center") {
+        imageCenter_done = true;
+        Center_clicked_image = path;
       } else if (name == "up") {
         imageUp_done = true;
         Up_clicked_image = path;
@@ -1238,6 +1267,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     });
 
+  }
+
+  All_Done(){
+    if(imageCenter_done && imageUp_done && imageDown_done && imageRight_done && imageLeft_done){
+      return true;
+    }else{
+      return false;
+    }
   }
 
 }

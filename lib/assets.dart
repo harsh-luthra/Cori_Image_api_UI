@@ -1,6 +1,6 @@
  class Assets{
 
- static const String front_txt = "Look Front";
+ static const String center_txt = "Look Front";
  static const String up_txt = "Look Up";
  static const String down_txt = "Look Down";
  static const String left_txt = "Look Left";
